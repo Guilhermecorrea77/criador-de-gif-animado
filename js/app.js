@@ -2,6 +2,9 @@
 import { buildSequence, drawSeqItem, outputSize, renderFrame, gifDelay } from './render.js';
 import { encodeGif } from './encoder.js';
 import { extractFrames } from './video.js';
+import { decodeGif, canDecodeGif } from './gifdecode.js';
+import { recordVideo, videoSupport } from './videoexport.js';
+import { Camera, hasCamera } from './camera.js';
 
 const MAX_FRAMES = 60;
 const MAX_SIDE = 1600; // imagens maiores são reduzidas ao importar (economiza memória)
@@ -75,6 +78,10 @@ const state = {
   playing: true,
   encoding: null,
   lastGif: null, // { blob, url }
+  urls: new Set(), // todas as URLs criadas (revogadas só ao recomeçar, por causa do desfazer)
+  undo: [],
+  redo: [],
+  cacheVersion: 0,
 };
 
 // ---------------------------------------------------------------- importação
@@ -104,6 +111,7 @@ async function blobToFrame(blob, name) {
     url = URL.createObjectURL(small);
     img = await loadImage(url);
   }
+  state.urls.add(url);
   return { id: uid(), url, img, name, crop: null, delay: null };
 }
 
@@ -113,18 +121,46 @@ async function addBlobs(blobs, { silent = false } = {}) {
     toast(`Limite de ${MAX_FRAMES} quadros atingido.`, true);
     return 0;
   }
-  const list = blobs.slice(0, room);
+  const wasEmpty = state.frames.length === 0;
+  // GIFs animados viram vários quadros (quando o navegador suporta)
+  const items = [];
+  let gifTimings = null;
+  for (const b of blobs) {
+    if (b.type === 'image/gif') {
+      const frames = await decodeGif(b, MAX_FRAMES);
+      if (frames) {
+        frames.forEach((f) => items.push({ blob: f.blob, delay: f.delay }));
+        gifTimings = (gifTimings || []).concat(frames.map((f) => f.delay));
+        continue;
+      }
+      if (!canDecodeGif() && !silent) toast('Este navegador lê só o primeiro quadro de GIFs animados.');
+    }
+    items.push({ blob: b, delay: null });
+  }
+  const list = items.slice(0, room);
+  if (!list.length) return 0;
+  pushHistory();
   let ok = 0;
-  for (const b of list) {
+  for (const it of list) {
     try {
-      state.frames.push(await blobToFrame(b, b.name || 'quadro'));
+      const f = await blobToFrame(it.blob, it.blob.name || 'quadro');
+      f.delay = it.delay;
+      state.frames.push(f);
       ok++;
     } catch {
       /* arquivo ignorado */
     }
   }
+  // GIF importado com ritmo constante: usa a velocidade global em vez de tempo por quadro
+  if (gifTimings && wasEmpty) {
+    const d = gifTimings[0];
+    if (gifTimings.every((x) => x === d)) {
+      state.frames.forEach((f) => (f.delay = null));
+      setFps(1000 / d);
+    }
+  }
   if (!silent) {
-    if (blobs.length > room) toast(`Somente ${room} quadro(s) adicionados (limite de ${MAX_FRAMES}).`);
+    if (items.length > room) toast(`Somente ${room} quadro(s) adicionados (limite de ${MAX_FRAMES}).`);
     else if (ok < list.length) toast('Alguns arquivos não puderam ser lidos.', true);
   }
   if (ok) {
@@ -134,8 +170,60 @@ async function addBlobs(blobs, { silent = false } = {}) {
   return ok;
 }
 
+const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
 function imageFilesFrom(listLike) {
-  return [...(listLike || [])].filter((f) => f && f.type && f.type.startsWith('image/'));
+  // ordena por nome (foto-2 antes de foto-10), como no explorador de arquivos
+  return [...(listLike || [])]
+    .filter((f) => f && f.type && f.type.startsWith('image/'))
+    .sort((a, b) => collator.compare(a.name || '', b.name || ''));
+}
+
+function setFps(v) {
+  const fps = Math.min(50, Math.max(0.5, Math.round(v * 2) / 2));
+  state.settings.fps = fps;
+  $('#fps').value = fps;
+  $('#fpsOut').textContent = `${nf(fps)} qps · ${Math.round(1000 / fps)} ms`;
+  onSettingsChanged();
+}
+
+// ---------------------------------------------------------------- desfazer / refazer
+const snapshot = () => ({
+  frames: state.frames.map((f) => ({ f, crop: f.crop, delay: f.delay })),
+  sel: state.selectedId,
+});
+
+function restore(snap) {
+  state.frames = snap.frames.map(({ f, crop, delay }) => Object.assign(f, { crop, delay }));
+  state.selectedId = snap.sel;
+  if (!state.frames.length) { showUpload(); renderFrameList(); updateHistoryButtons(); return; }
+  showEditor();
+  onFramesChanged();
+}
+
+function pushHistory() {
+  state.undo.push(snapshot());
+  if (state.undo.length > 60) state.undo.shift();
+  state.redo = [];
+  updateHistoryButtons();
+}
+
+function undo() {
+  if (!state.undo.length) return;
+  state.redo.push(snapshot());
+  restore(state.undo.pop());
+  updateHistoryButtons();
+}
+
+function redo() {
+  if (!state.redo.length) return;
+  state.undo.push(snapshot());
+  restore(state.redo.pop());
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+  $('#btnUndo').disabled = !state.undo.length;
+  $('#btnRedo').disabled = !state.redo.length;
 }
 
 // ---------------------------------------------------------------- telas
@@ -153,8 +241,12 @@ function showUpload() {
 
 function resetAll() {
   state.encoding?.abort();
-  state.frames.forEach((f) => URL.revokeObjectURL(f.url));
+  state.urls.forEach((u) => URL.revokeObjectURL(u));
+  state.urls.clear();
   state.frames = [];
+  state.undo = [];
+  state.redo = [];
+  updateHistoryButtons();
   state.cache = [];
   state.selectedId = null;
   if (state.lastGif) URL.revokeObjectURL(state.lastGif.url);
@@ -186,11 +278,18 @@ async function renderAll() {
 
   const { W, H } = outputSize(frames, s);
   state.size = { W, H };
-  const prev = state.cache;
+  // Só os ajustes visuais entram na chave: mudar velocidade/loop não re-renderiza nada
+  const { aspect, width, fit, bg, filter, brightness, contrast, saturation, text } = s;
+  const visualKey = JSON.stringify({ aspect, width, fit, bg, filter, brightness, contrast, saturation, text, W, H });
   const next = [];
   const t0 = performance.now();
   for (let i = 0; i < frames.length; i++) {
-    next[i] = renderFrame(frames[i], W, H, s, prev[i]);
+    const f = frames[i];
+    const rk = visualKey + JSON.stringify(f.crop);
+    if (f._canvas && f._rk === rk) { next[i] = f._canvas; continue; }
+    f._canvas = renderFrame(f, W, H, s, f._canvas);
+    f._rk = rk;
+    next[i] = f._canvas;
     // cede a vez à interface a cada ~30 ms em listas grandes
     if (performance.now() - t0 > 30 && i % 4 === 3) {
       await sleep();
@@ -199,6 +298,7 @@ async function renderAll() {
   }
   if (token !== state.renderToken) return;
   state.cache = next;
+  state.cacheVersion++;
   state.seq = buildSequence(frames, s);
   state.dirty = false;
 
@@ -247,7 +347,11 @@ const player = {
   draw() {
     const seq = state.seq;
     if (!seq.length) return;
-    const item = seq[this.i % seq.length];
+    const k = this.i % seq.length;
+    if (k === this.drawnI && state.cacheVersion === this.drawnV) return; // nada mudou
+    this.drawnI = k;
+    this.drawnV = state.cacheVersion;
+    const item = seq[k];
     const ctx = $('#previewCanvas').getContext('2d');
     drawSeqItem(ctx, item, state.cache);
     const frameNum = item.a + 1;
@@ -364,6 +468,7 @@ function selectFrame(id) {
 
 function moveFrame(from, to) {
   if (to < 0 || to >= state.frames.length || from === to) return;
+  pushHistory();
   const [f] = state.frames.splice(from, 1);
   state.frames.splice(to, 0, f);
   const [c] = state.cache.splice(from, 1);
@@ -380,7 +485,8 @@ function frameAction(act) {
     case 'right': moveFrame(idx, idx + 1); break;
     case 'dup': {
       if (state.frames.length >= MAX_FRAMES) return;
-      const copy = { ...f, id: uid(), crop: f.crop ? { ...f.crop } : null, _cropCache: null, _cropKey: null };
+      pushHistory();
+      const copy = { ...f, id: uid(), crop: f.crop ? { ...f.crop } : null, _cropCache: null, _cropKey: null, _canvas: null, _rk: null };
       state.frames.splice(idx + 1, 0, copy);
       state.cache.splice(idx + 1, 0, undefined);
       state.selectedId = copy.id;
@@ -388,13 +494,13 @@ function frameAction(act) {
       break;
     }
     case 'remove': {
-      const stillUsed = state.frames.some((o) => o !== f && o.url === f.url);
-      if (!stillUsed) URL.revokeObjectURL(f.url);
+      // a URL não é revogada aqui para o "desfazer" continuar funcionando
+      pushHistory();
       state.frames.splice(idx, 1);
       state.cache.splice(idx, 1);
       const nextSel = state.frames[idx] || state.frames[idx - 1];
       state.selectedId = nextSel ? nextSel.id : null;
-      if (!state.frames.length) { resetAll(); return; }
+      if (!state.frames.length) { showUpload(); renderFrameList(); toast('Todos os quadros removidos. Ctrl+Z desfaz.'); return; }
       onFramesChanged();
       break;
     }
@@ -464,6 +570,7 @@ function bindFrameList() {
     const f = state.frames[selectedIndex()];
     if (!f) return;
     const v = parseInt(di.value, 10);
+    pushHistory();
     f.delay = Number.isFinite(v) && v > 0 ? Math.min(10000, Math.max(20, v)) : null;
     di.value = f.delay ?? '';
     renderFrameList();
@@ -675,6 +782,7 @@ function showResult() {
 
   const file = new File([g.blob], fileName(), { type: 'image/gif' });
   $('#btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
+  $('#btnVideoExport').hidden = !videoSupport();
   $('#resultModal').showModal();
 }
 
@@ -802,6 +910,7 @@ function bindCrop() {
   });
   $('#btnCropSave').addEventListener('click', () => {
     if (!cropState.cropper) return;
+    pushHistory();
     cropState.frame.crop = readCrop();
     closeCrop();
     onFramesChanged();
@@ -809,6 +918,7 @@ function bindCrop() {
   $('#btnCropAll').addEventListener('click', () => {
     if (!cropState.cropper) return;
     const c = readCrop();
+    pushHistory();
     state.frames.forEach((f) => (f.crop = { ...c }));
     closeCrop();
     onFramesChanged();
@@ -816,6 +926,7 @@ function bindCrop() {
   });
   $('#btnCropClear').addEventListener('click', () => {
     if (!cropState.frame) return;
+    pushHistory();
     cropState.frame.crop = null;
     closeCrop();
     onFramesChanged();
@@ -915,10 +1026,7 @@ function bindVideo() {
       const n = await addBlobs(blobs, { silent: true });
       if (wasEmpty) {
         // mantém a velocidade real do vídeo
-        state.settings.fps = fps;
-        $('#fps').value = fps;
-        $('#fpsOut').textContent = `${nf(fps)} qps · ${Math.round(1000 / fps)} ms`;
-        onSettingsChanged();
+        setFps(fps);
       }
       toast(`${n} quadro(s) extraído(s) do vídeo.`);
     } catch (err) {
@@ -971,6 +1079,141 @@ async function makeSample() {
   await addBlobs(blobs);
 }
 
+// ---------------------------------------------------------------- exportar vídeo
+let videoJob = null;
+async function exportVideo() {
+  const btn = $('#btnVideoExport');
+  const label = $('span', btn);
+  if (videoJob) { videoJob.abort(); return; }
+  const g = state.lastGif;
+  if (!g) return;
+  const per = totalDuration(state.seq);
+  const loop = state.settings.loop;
+  // vídeo curto demais fica estranho: repete até ~3 s (máx. 10 voltas)
+  const passes = loop === 0 ? Math.min(10, Math.max(1, Math.ceil(3000 / per))) : loop;
+  videoJob = new AbortController();
+  label.textContent = 'Gravando… 0% (cancelar)';
+  try {
+    const { blob, ext } = await recordVideo({
+      seq: state.seq, cache: state.cache, W: g.W, H: g.H, passes, signal: videoJob.signal,
+      onProgress: (p) => (label.textContent = `Gravando… ${Math.round(p * 100)}% (cancelar)`),
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName().replace(/\.gif$/, '.' + ext);
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(`Vídeo ${ext.toUpperCase()} salvo (${formatBytes(blob.size)}).`);
+  } catch (err) {
+    if (err.name !== 'AbortError') toast(err.message || 'Falha ao gravar o vídeo.', true);
+  } finally {
+    videoJob = null;
+    label.textContent = 'Baixar vídeo';
+  }
+}
+
+// ---------------------------------------------------------------- câmera
+const cam = { camera: null, mode: 'single', busy: false, taken: 0 };
+
+async function openCamera() {
+  const modal = $('#camModal');
+  cam.camera ||= new Camera($('#camVideo'));
+  cam.taken = 0;
+  $('#camHint').textContent = 'As fotos entram direto na lista de quadros.';
+  modal.showModal();
+  try {
+    await cam.camera.start();
+  } catch (err) {
+    modal.close();
+    toast(err.name === 'NotAllowedError' ? 'Permissão da câmera negada.' : 'Não foi possível abrir a câmera.', true);
+  }
+}
+
+function flash() {
+  const f = $('#camFlash');
+  f.classList.add('is-on');
+  requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('is-on')));
+}
+
+async function countdown(n) {
+  const el = $('#camCount');
+  for (let k = n; k > 0; k--) {
+    if (!cam.busy) break;
+    el.textContent = k;
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  el.textContent = '';
+}
+
+async function snapAndAdd() {
+  const blob = await cam.camera.snap();
+  blob.name = `camera-${Date.now()}.jpg`;
+  flash();
+  const n = await addBlobs([blob], { silent: true });
+  cam.taken += n;
+  $('#camHint').textContent = n
+    ? `${cam.taken} foto(s) capturada(s). Toque em "Concluir" quando terminar.`
+    : `Limite de ${MAX_FRAMES} quadros atingido.`;
+  return n;
+}
+
+async function capture() {
+  if (!cam.camera?.stream) return;
+  const btn = $('#btnSnap');
+  if (cam.busy) { cam.busy = false; return; } // segundo toque cancela a sequência
+  cam.busy = true;
+  $('span', btn).textContent = 'Parar';
+  try {
+    if (cam.mode === 'single') {
+      await snapAndAdd();
+    } else {
+      await countdown(3);
+      const shots = +$('#camShots').value;
+      const gap = +$('#camGap').value;
+      for (let i = 0; i < shots && cam.busy; i++) {
+        if (!(await snapAndAdd())) break;
+        if (i < shots - 1) await new Promise((r) => setTimeout(r, gap));
+      }
+      if (cam.busy) setFps(1000 / gap);
+    }
+  } finally {
+    cam.busy = false;
+    $('#camCount').textContent = '';
+    $('span', btn).textContent = 'Capturar';
+  }
+}
+
+function bindCamera() {
+  if (!hasCamera()) { $$('[data-cam]').forEach((b) => (b.hidden = true)); return; }
+  $$('[data-cam]').forEach((b) => b.addEventListener('click', openCamera));
+  $('#btnSnap').addEventListener('click', capture);
+  $('#btnCamFlip').addEventListener('click', () => cam.camera?.flip().catch(() => toast('Não há outra câmera disponível.', true)));
+  const seg = $('#camModeSeg');
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]');
+    if (!b) return;
+    cam.mode = b.dataset.v;
+    $$('button', seg).forEach((x) => x.classList.toggle('is-active', x === b));
+    $('#camBurstOpts').hidden = cam.mode !== 'burst';
+  });
+  const shots = $('#camShots'), gap = $('#camGap');
+  const paint = () => {
+    $('#camShotsOut').textContent = shots.value;
+    $('#camGapOut').textContent = `${gap.value} ms`;
+  };
+  shots.addEventListener('input', paint);
+  gap.addEventListener('input', paint);
+  paint();
+  $('#resultModal').addEventListener('close', () => videoJob?.abort());
+  $('#camModal').addEventListener('close', () => {
+    cam.busy = false;
+    cam.camera?.stop();
+  });
+}
+
 // ---------------------------------------------------------------- eventos globais
 function bindGlobal() {
   $('#fileInput').addEventListener('change', (e) => { addBlobs(imageFilesFrom(e.target.files)); e.target.value = ''; });
@@ -984,6 +1227,9 @@ function bindGlobal() {
   $('#btnGenerate').addEventListener('click', generate);
   $('#btnCancel').addEventListener('click', () => state.encoding?.abort());
   $('#btnDownload').addEventListener('click', download);
+  $('#btnVideoExport').addEventListener('click', exportVideo);
+  $('#btnUndo').addEventListener('click', undo);
+  $('#btnRedo').addEventListener('click', redo);
   $('#btnShare').addEventListener('click', share);
 
   // fechar modais
@@ -1035,6 +1281,9 @@ function bindGlobal() {
     if (e.key === ' ' && !e.target.closest('button, .frame')) { e.preventDefault(); setPlaying(!state.playing); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) { e.preventDefault(); frameAction('remove'); }
     if (e.key === 'Escape' && state.selectedId) selectFrame(state.selectedId);
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
   });
 }
 
@@ -1053,6 +1302,7 @@ function init() {
   bindGlobal();
   setPlaying(true);
   player.start();
+  bindCamera();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});

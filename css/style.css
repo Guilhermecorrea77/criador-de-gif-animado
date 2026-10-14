@@ -199,7 +199,7 @@ main { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: var(--s
 .frame.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(124 108 255 / .25); }
 .frame.is-dragging { opacity: .35; }
 .frame.is-drop-target { border-color: var(--accent-2); transform: scale(1.04); }
-.frame canvas { width: 100%; height: 100%; object-fit: contain; }
+.frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .frame__num, .frame__badge {
   position: absolute; font-size: 11px; font-weight: 700; line-height: 1;
   padding: var(--s1) 6px; border-radius: 6px; background: rgb(11 16 32 / .82); color: var(--text);
@@ -409,6 +409,27 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .crop__stage { height: 48vh; }
   #btnReset span, .topbar .btn--sm { font-size: 0; gap: 0; padding: 0 var(--s2); }
   .topbar .btn--sm svg { width: 18px; height: 18px; }
+}
+
+/* ---------------- Adições: desfazer, câmera ---------------- */
+.card__tools { align-items: center; flex-wrap: wrap; }
+.card__history { display: flex; gap: var(--s1); margin-left: auto; }
+.icon-btn--sm { width: 34px; height: 34px; }
+.icon-btn--sm svg { width: 16px; height: 16px; }
+
+.cam__stage { position: relative; display: grid; place-items: center; border-radius: var(--radius-sm); overflow: hidden; background: #000; min-height: 220px; }
+.cam__stage video { width: 100%; max-height: 52vh; object-fit: contain; }
+.cam__stage video.is-mirrored { transform: scaleX(-1); }
+.cam__count { position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(56px, 14vw, 120px); font-weight: 800; color: #fff; text-shadow: 0 4px 24px rgb(0 0 0 / .6); pointer-events: none; }
+.cam__flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.cam__flash.is-on { opacity: .85; transition: none; }
+.cam__flip { position: absolute; right: var(--s3); top: var(--s3); background: rgb(11 16 32 / .7); }
+.video__grid--2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 600px) {
+  .video__grid--2 { grid-template-columns: 1fr; }
+  .card__head { row-gap: var(--s3); }
+  .card__tools { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+  .card__tools .btn--sm { background: var(--surface-2); border-color: var(--border); color: var(--text); padding: 0 var(--s2); }
 }
 
 @media (prefers-reduced-motion: reduce) {
