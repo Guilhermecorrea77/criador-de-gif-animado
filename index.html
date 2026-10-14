@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Criador de GIF Animado</title>
+  <meta name="description" content="Crie GIFs animados a partir de fotos ou vídeos direto no navegador: recorte, filtros, texto, transições e efeito boomerang. Nada é enviado para servidores.">
+  <meta name="theme-color" content="#0b1020">
+  <meta property="og:title" content="Criador de GIF Animado">
+  <meta property="og:description" content="Transforme fotos e vídeos em GIFs animados, 100% no navegador.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="vendor/cropper.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="vendor/gif.js" defer></script>
+  <script src="vendor/cropper.min.js" defer></script>
+  <script src="js/app.js" type="module"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="./" aria-label="Criador de GIF Animado — início">
+        <img src="assets/icon.svg" alt="" width="32" height="32">
+        <span>Criador de <strong>GIF</strong></span>
+      </a>
+      <div class="topbar__actions">
+        <button class="btn btn--ghost btn--sm" id="btnReset" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>
+          Começar de novo
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- ============ TELA 1: UPLOAD ============ -->
+    <section class="view view--upload" id="viewUpload">
+      <div class="hero">
+        <h1>Dê vida às suas fotos</h1>
+        <p>Junte imagens ou trechos de vídeo, ajuste e baixe seu GIF. Tudo acontece no seu navegador: nenhum arquivo sai do seu aparelho.</p>
+      </div>
+
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/*" multiple>
+        <svg class="dropzone__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1M16 8l-4-4-4 4M12 4v12"/></svg>
+        <span class="dropzone__title">Arraste imagens aqui ou <u>clique para escolher</u></span>
+        <span class="dropzone__hint">JPG, PNG, WebP, GIF estático · até <span data-max></span> quadros · ou cole com Ctrl+V</span>
+      </label>
+
+      <div class="upload-alt">
+        <button class="btn btn--outline" id="btnVideo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
+          Extrair quadros de um vídeo
+        </button>
+        <button class="btn btn--ghost" id="btnSample">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+          Testar com exemplo
+        </button>
+        <input type="file" id="videoInput" accept="video/*" hidden>
+      </div>
+
+      <ul class="features">
+        <li><b>Recorte e giro</b> por quadro ou em todos de uma vez</li>
+        <li><b>Filtros e texto</b> com transição suave entre quadros</li>
+        <li><b>Boomerang e ritmo</b> ordem inversa e tempo por quadro</li>
+        <li><b>Funciona offline</b> depois do primeiro acesso</li>
+      </ul>
+    </section>
+
+    <!-- ============ TELA 2: EDITOR ============ -->
+    <section class="view view--editor" id="viewEditor" hidden>
+      <div class="editor">
+        <div class="editor__main">
+          <!-- Pré-visualização -->
+          <div class="card preview">
+            <div class="preview__stage" id="previewStage">
+              <canvas id="previewCanvas" aria-label="Pré-visualização do GIF"></canvas>
+            </div>
+            <div class="preview__bar">
+              <button class="icon-btn" id="btnPlay" aria-label="Pausar" title="Reproduzir/pausar (Espaço)">
+                <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+                <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
+              </button>
+              <span class="preview__info" id="previewInfo">—</span>
+              <span class="preview__frame" id="previewFrame"></span>
+            </div>
+          </div>
+
+          <!-- Quadros -->
+          <div class="card frames">
+            <div class="card__head">
+              <h2>Quadros <span class="count" id="frameCount">0</span></h2>
+              <div class="card__tools">
+                <label class="btn btn--ghost btn--sm">
+                  <input type="file" id="addInput" accept="image/*" multiple hidden>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  Imagens
+                </label>
+                <button class="btn btn--ghost btn--sm" id="btnAddVideo">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  Vídeo
+                </button>
+              </div>
+            </div>
+            <ol class="frames__list" id="frameList" aria-label="Lista de quadros"></ol>
+
+            <div class="frame-tools" id="frameTools" hidden>
+              <span class="frame-tools__label" id="frameToolsLabel">Quadro 1</span>
+              <div class="frame-tools__btns">
+                <button class="icon-btn" data-act="left" title="Mover para a esquerda" aria-label="Mover para a esquerda"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+                <button class="icon-btn" data-act="right" title="Mover para a direita" aria-label="Mover para a direita"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button class="btn btn--ghost btn--sm" data-act="crop"><svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2"/></svg>Recortar</button>
+                <button class="btn btn--ghost btn--sm" data-act="dup"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Duplicar</button>
+                <label class="delay-input" title="Tempo deste quadro (vazio = padrão)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg>
+                  <input type="number" id="frameDelay" min="20" max="10000" step="10" placeholder="auto" inputmode="numeric">
+                  <span>ms</span>
+                </label>
+                <button class="btn btn--danger btn--sm" data-act="remove"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Remover</button>
+              </div>
+            </div>
+            <p class="hint">Toque em um quadro para editá-lo. No computador, arraste para reordenar.</p>
+          </div>
+        </div>
+
+        <!-- Configurações -->
+        <aside class="editor__side card" id="settingsPanel">
+          <details open class="group">
+            <summary>Tempo e repetição</summary>
+            <div class="group__body">
+              <div class="field">
+                <div class="field__row">
+                  <label for="fps">Velocidade</label>
+                  <output id="fpsOut"></output>
+                </div>
+                <input type="range" id="fps" min="0.5" max="50" step="0.5">
+                <div class="field__scale"><span>Lento</span><span>Rápido</span></div>
+              </div>
+              <div class="field">
+                <label for="loop">Repetir</label>
+                <select id="loop">
+                  <option value="0">Infinitamente</option>
+                  <option value="1">Tocar 1 vez</option>
+                  <option value="2">2 vezes</option>
+                  <option value="3">3 vezes</option>
+                  <option value="5">5 vezes</option>
+                </select>
+              </div>
+              <div class="switches">
+                <label class="switch"><input type="checkbox" id="boomerang"><span></span>Boomerang (ida e volta)</label>
+                <label class="switch"><input type="checkbox" id="reverse"><span></span>Inverter ordem</label>
+              </div>
+            </div>
+          </details>
+
+          <details open class="group">
+            <summary>Tamanho e formato</summary>
+            <div class="group__body">
+              <div class="field">
+                <label>Proporção</label>
+                <div class="chips" id="aspectChips" role="radiogroup">
+                  <button data-v="original">Original</button>
+                  <button data-v="1:1">1:1</button>
+                  <button data-v="4:3">4:3</button>
+                  <button data-v="3:4">3:4</button>
+                  <button data-v="16:9">16:9</button>
+                  <button data-v="9:16">9:16</button>
+                </div>
+              </div>
+              <div class="field">
+                <div class="field__row">
+                  <label for="width">Largura</label>
+                  <output id="sizeOut"></output>
+                </div>
+                <select id="width">
+                  <option value="240">240 px (bem leve)</option>
+                  <option value="320">320 px</option>
+                  <option value="480">480 px (recomendado)</option>
+                  <option value="640">640 px</option>
+                  <option value="800">800 px</option>
+                  <option value="1080">1080 px (pesado)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Ajuste da imagem</label>
+                <div class="segmented" id="fitSeg">
+                  <button data-v="cover">Preencher</button>
+                  <button data-v="contain">Encaixar</button>
+                </div>
+              </div>
+              <div class="field field--inline" id="bgField">
+                <label for="bg">Cor de fundo</label>
+                <input type="color" id="bg">
+              </div>
+            </div>
+          </details>
+
+          <details class="group">
+            <summary>Filtros</summary>
+            <div class="group__body">
+              <div class="chips" id="filterChips">
+                <button data-v="none">Nenhum</button>
+                <button data-v="bw">P&amp;B</button>
+                <button data-v="sepia">Sépia</button>
+                <button data-v="vintage">Vintage</button>
+                <button data-v="vivid">Vívido</button>
+                <button data-v="warm">Quente</button>
+                <button data-v="cold">Frio</button>
+              </div>
+              <div class="field">
+                <div class="field__row"><label for="brightness">Brilho</label><output id="brightnessOut"></output></div>
+                <input type="range" id="brightness" min="-60" max="60" step="1">
+              </div>
+              <div class="field">
+                <div class="field__row"><label for="contrast">Contraste</label><output id="contrastOut"></output></div>
+                <input type="range" id="contrast" min="-80" max="80" step="1">
+              </div>
+              <div class="field">
+                <div class="field__row"><label for="saturation">Saturação</label><output id="saturationOut"></output></div>
+                <input type="range" id="saturation" min="-100" max="100" step="1">
+              </div>
+              <button class="link-btn" id="btnResetFilters">Restaurar filtros</button>
+            </div>
+          </details>
+
+          <details class="group">
+            <summary>Texto / legenda</summary>
+            <div class="group__body">
+              <div class="field">
+                <label for="textContent">Texto</label>
+                <textarea id="textContent" rows="2" placeholder="Ex.: Feliz aniversário!"></textarea>
+              </div>
+              <div class="field">
+                <label>Posição</label>
+                <div class="segmented" id="textPosSeg">
+                  <button data-v="top">Topo</button>
+                  <button data-v="middle">Centro</button>
+                  <button data-v="bottom">Base</button>
+                </div>
+              </div>
+              <div class="field">
+                <div class="field__row"><label for="textSize">Tamanho</label><output id="textSizeOut"></output></div>
+                <input type="range" id="textSize" min="4" max="20" step="0.5">
+              </div>
+              <div class="field field--inline">
+                <label for="textColor">Cor</label>
+                <input type="color" id="textColor">
+              </div>
+              <label class="switch"><input type="checkbox" id="textOutline"><span></span>Contorno</label>
+            </div>
+          </details>
+
+          <details class="group">
+            <summary>Transição</summary>
+            <div class="group__body">
+              <div class="segmented" id="transitionSeg">
+                <button data-v="none">Corte seco</button>
+                <button data-v="fade">Esmaecer</button>
+              </div>
+              <div class="field" data-fade-only>
+                <div class="field__row"><label for="transitionMs">Duração da transição</label><output id="transitionMsOut"></output></div>
+                <input type="range" id="transitionMs" min="60" max="1500" step="20">
+              </div>
+              <div class="field" data-fade-only>
+                <div class="field__row"><label for="transitionSteps">Suavidade</label><output id="transitionStepsOut"></output></div>
+                <input type="range" id="transitionSteps" min="2" max="8" step="1">
+              </div>
+              <p class="hint" data-fade-only>A transição adiciona quadros intermediários e deixa o arquivo maior.</p>
+            </div>
+          </details>
+
+          <details class="group">
+            <summary>Qualidade</summary>
+            <div class="group__body">
+              <div class="segmented" id="qualitySeg">
+                <button data-v="low">Leve</button>
+                <button data-v="medium">Equilibrada</button>
+                <button data-v="high">Máxima</button>
+              </div>
+              <label class="switch"><input type="checkbox" id="dither"><span></span>Dithering (gradientes mais suaves)</label>
+            </div>
+          </details>
+
+          <div class="generate">
+            <p class="generate__summary" id="genSummary"></p>
+            <button class="btn btn--primary btn--lg btn--block" id="btnGenerate">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9z"/></svg>
+              Gerar GIF
+            </button>
+            <div class="progress" id="progress" hidden>
+              <div class="progress__track"><div class="progress__bar" id="progressBar"></div></div>
+              <div class="progress__row">
+                <span id="progressText">Preparando…</span>
+                <button class="link-btn" id="btnCancel">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Feito com HTML, CSS e JavaScript · Seus arquivos nunca saem do seu aparelho
+  </footer>
+
+  <!-- ============ MODAL: RESULTADO ============ -->
+  <dialog class="modal" id="resultModal" aria-labelledby="resultTitle">
+    <div class="modal__box modal__box--result">
+      <div class="modal__head">
+        <h2 id="resultTitle">Seu GIF está pronto!</h2>
+        <button class="icon-btn" data-close aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="result__img"><img id="resultImg" alt="GIF gerado"></div>
+      <dl class="result__meta" id="resultMeta"></dl>
+      <div class="field">
+        <label for="fileName">Nome do arquivo</label>
+        <div class="input-suffix"><input type="text" id="fileName" value="meu-gif"><span>.gif</span></div>
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close>Continuar editando</button>
+        <button class="btn btn--outline" id="btnShare" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+          Compartilhar
+        </button>
+        <button class="btn btn--primary" id="btnDownload">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>
+          Baixar GIF
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ============ MODAL: RECORTE ============ -->
+  <dialog class="modal" id="cropModal" aria-labelledby="cropTitle">
+    <div class="modal__box modal__box--wide">
+      <div class="modal__head">
+        <h2 id="cropTitle">Recortar quadro</h2>
+        <button class="icon-btn" data-close aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="crop__stage"><img id="cropImg" alt="Imagem para recortar"></div>
+      <div class="crop__tools">
+        <div class="chips chips--sm" id="cropAspect">
+          <button data-v="free">Livre</button>
+          <button data-v="output">Igual ao GIF</button>
+          <button data-v="1">1:1</button>
+          <button data-v="1.3333">4:3</button>
+          <button data-v="1.7778">16:9</button>
+          <button data-v="0.5625">9:16</button>
+        </div>
+        <div class="crop__icons">
+          <button class="icon-btn" data-crop="rotL" title="Girar à esquerda" aria-label="Girar à esquerda"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg></button>
+          <button class="icon-btn" data-crop="rotR" title="Girar à direita" aria-label="Girar à direita"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+          <button class="icon-btn" data-crop="flipH" title="Espelhar" aria-label="Espelhar"><svg viewBox="0 0 24 24"><path d="M12 3v18M8 7 3 12l5 5V7zM16 7l5 5-5 5V7z"/></svg></button>
+        </div>
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" id="btnCropClear">Remover recorte</button>
+        <span class="spacer"></span>
+        <button class="btn btn--outline" id="btnCropAll">Aplicar em todos</button>
+        <button class="btn btn--primary" id="btnCropSave">Salvar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ============ MODAL: VÍDEO ============ -->
+  <dialog class="modal" id="videoModal" aria-labelledby="videoTitle">
+    <div class="modal__box modal__box--wide">
+      <div class="modal__head">
+        <h2 id="videoTitle">Extrair quadros do vídeo</h2>
+        <button class="icon-btn" data-close aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <video id="videoEl" class="video__el" controls playsinline muted></video>
+      <div class="video__grid">
+        <div class="field">
+          <div class="field__row"><label for="vStart">Início</label><output id="vStartOut"></output></div>
+          <input type="range" id="vStart" min="0" step="0.05">
+          <button class="link-btn" data-mark="start">Usar posição atual</button>
+        </div>
+        <div class="field">
+          <div class="field__row"><label for="vEnd">Fim</label><output id="vEndOut"></output></div>
+          <input type="range" id="vEnd" min="0" step="0.05">
+          <button class="link-btn" data-mark="end">Usar posição atual</button>
+        </div>
+        <div class="field">
+          <div class="field__row"><label for="vFps">Quadros por segundo</label><output id="vFpsOut"></output></div>
+          <input type="range" id="vFps" min="1" max="15" step="1" value="8">
+        </div>
+      </div>
+      <p class="hint" id="videoHint"></p>
+      <div class="progress" id="videoProgress" hidden>
+        <div class="progress__track"><div class="progress__bar" id="videoProgressBar"></div></div>
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close>Cancelar</button>
+        <button class="btn btn--primary" id="btnExtract">Extrair quadros</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
