@@ -1,5 +1,5 @@
 // Service worker: rede primeiro, cache como reserva (funciona offline sem servir versão velha).
-const CACHE = 'gif-maker-v4';
+const CACHE = 'gif-maker-v5';
 const ASSETS = [
   './', 'index.html', 'css/style.css',
   'js/app.js', 'js/render.js', 'js/encoder.js', 'js/video.js', 'js/gifdecode.js', 'js/videoexport.js', 'js/camera.js',

@@ -36,7 +36,7 @@ No celular:
 - **Proporções**: original, 16:9, 16:10, 21:9, 4:3, 3:2, 5:4, 1:1, 4:5, 3:4, 2:3, 9:16, 9:19,5 ou personalizada (ex.: 7:3); largura de 240 a 1280 px; encaixar ou preencher, com cor de fundo automática (cor da borda do print)
 - **Passo a passo**: numere os quadros (1, 2, 3…) e defina o tempo em segundos por print
 - **Tema**: claro ou escuro, à sua escolha
-- **Sem voltar**: vídeo, câmera e exemplo ficam dentro da caixa de importação, e o GIF gerado aparece na página (marcado como "desatualizado" se você mudar algo)
+- **Sem voltar**: vídeo (arraste ou escolha) e câmera ficam dentro da caixa de importação, e o GIF gerado aparece na página (marcado como "desatualizado" se você mudar algo)
 - **Filtros**: P&B, sépia, vintage, vívido, quente, frio, além de brilho, contraste e saturação
 - **Texto/legenda** com posição, tamanho, cor e contorno
 - **Transição** com esmaecimento suave entre quadros

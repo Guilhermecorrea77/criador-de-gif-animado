@@ -1080,7 +1080,6 @@ function updateVideoHint() {
 
 function bindVideo() {
   const pick = () => $('#videoInput').click();
-  $('#btnVideo').addEventListener('click', pick);
   $('#btnAddVideo').addEventListener('click', pick);
   $('#videoInput').addEventListener('change', (e) => {
     const f = e.target.files[0];
@@ -1136,37 +1135,6 @@ function bindVideo() {
     if (videoState.url) URL.revokeObjectURL(videoState.url);
     videoState.url = null;
   });
-}
-
-// ---------------------------------------------------------------- exemplo
-async function makeSample() {
-  const blobs = [];
-  const N = 8;
-  for (let i = 0; i < N; i++) {
-    const c = document.createElement('canvas');
-    c.width = c.height = 480;
-    const ctx = c.getContext('2d');
-    const hue = (i / N) * 360;
-    const g = ctx.createLinearGradient(0, 0, 480, 480);
-    g.addColorStop(0, `hsl(${hue} 80% 60%)`);
-    g.addColorStop(1, `hsl(${(hue + 60) % 360} 80% 35%)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 480, 480);
-    const t = i / N;
-    const y = 120 + Math.abs(Math.sin(t * Math.PI)) * -60 + 200 * (1 - Math.abs(Math.sin(t * Math.PI)));
-    ctx.fillStyle = 'rgb(255 255 255 / .92)';
-    ctx.beginPath();
-    ctx.arc(240, y, 56, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgb(0 0 0 / .18)';
-    ctx.beginPath();
-    ctx.ellipse(240, 420, 70 - (420 - y) / 8, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
-    blob.name = `exemplo-${i + 1}.png`;
-    blobs.push(blob);
-  }
-  await addBlobs(blobs);
 }
 
 // ---------------------------------------------------------------- vídeo para WhatsApp
@@ -1404,9 +1372,15 @@ function bindCamera() {
 
 // ---------------------------------------------------------------- eventos globais
 function bindGlobal() {
-  $('#fileInput').addEventListener('change', (e) => { addBlobs(imageFilesFrom(e.target.files)); e.target.value = ''; });
+  $('#fileInput').addEventListener('change', (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    const imgs = imageFilesFrom(files);
+    const video = files.find((f) => f.type.startsWith('video/'));
+    if (imgs.length) addBlobs(imgs);
+    else if (video) openVideo(video);
+  });
   $('#addInput').addEventListener('change', (e) => { addBlobs(imageFilesFrom(e.target.files)); e.target.value = ''; });
-  $('#btnSample').addEventListener('click', makeSample);
   $('#btnReset').addEventListener('click', () => {
     if (state.frames.length && !confirmReset()) return;
     resetAll();

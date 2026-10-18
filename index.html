@@ -44,30 +44,21 @@
     <!-- ============ TELA 1: UPLOAD ============ -->
     <section class="view view--upload" id="viewUpload">
       <div class="hero">
-        <p class="hero__tag">Feito para screenshots</p>
         <h1>Prints de tela viram GIF</h1>
-        <p>Junte capturas de tela em um GIF ou vídeo para tutoriais passo a passo, demonstrações e relatos de bug. Tudo roda no seu navegador: nenhum arquivo sai do seu aparelho.</p>
+        <p>Junte capturas de tela em um GIF ou extraia parte de um vídeo.</p>
       </div>
 
       <div class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" accept="image/*" multiple aria-label="Escolher imagens ou prints">
+        <input type="file" id="fileInput" accept="image/*,video/*" multiple aria-label="Escolher prints, imagens ou vídeos">
         <div class="dropzone__main">
           <svg class="dropzone__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1M16 8l-4-4-4 4M12 4v12"/></svg>
-          <span class="dropzone__title">Arraste prints ou imagens aqui, <u>clique para escolher</u> ou cole com Ctrl+V</span>
-          <span class="dropzone__hint">PNG, JPG, WebP ou GIF · até <span data-max></span> quadros</span>
+          <span class="dropzone__title">Cole prints com Ctrl+V, arraste imagens ou vídeos, ou <u>clique para escolher</u></span>
+          <span class="dropzone__hint">PNG, JPG, WebP, GIF ou vídeo · até <span data-max></span> quadros</span>
         </div>
         <div class="dropzone__actions">
-          <button class="btn btn--outline" id="btnVideo" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
-            Extrair de um vídeo
-          </button>
           <button class="btn btn--outline" id="btnCam" data-cam type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
             Usar a câmera
-          </button>
-          <button class="btn btn--ghost" id="btnSample" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
-            Testar com exemplo
           </button>
         </div>
         <input type="file" id="videoInput" accept="video/*" hidden>
@@ -75,7 +66,7 @@
       <p class="dropzone__tip">Dica: tire o print com <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> (Windows) ou <kbd>⌘</kbd> <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>4</kbd> (Mac) e cole aqui.</p>
 
       <ol class="steps">
-        <li><b>Adicione os prints</b><span>Arraste, cole ou escolha os arquivos. Vídeo e câmera também funcionam.</span></li>
+        <li><b>Adicione os prints</b><span>Cole, arraste ou escolha os arquivos. Vídeo e câmera também funcionam.</span></li>
         <li><b>Ajuste</b><span>Proporção, recorte, tempo por quadro, texto e numeração dos passos.</span></li>
         <li><b>Baixe ou envie</b><span>GIF para qualquer lugar ou vídeo MP4 para o WhatsApp.</span></li>
       </ol>
