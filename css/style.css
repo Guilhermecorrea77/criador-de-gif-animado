@@ -406,6 +406,15 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .video__grid { grid-template-columns: 1fr; gap: var(--s4); }
   .modal__actions .btn { flex: 1 1 auto; }
   .modal__actions .spacer { display: none; }
+  /* ações sempre visíveis no celular, mesmo com o conteúdo rolando */
+  .modal__actions {
+    position: sticky; bottom: calc(-1 * var(--s5));
+    margin: 0 calc(-1 * var(--s4)) calc(-1 * var(--s5));
+    padding: var(--s3) var(--s4) var(--s5);
+    background: var(--surface); border-top: 1px solid var(--border);
+  }
+  #btnWaShare { order: -1; flex-basis: 100%; }
+  .result__img img, .wa__video { max-height: 34vh; }
   .crop__stage { height: 48vh; }
   #btnReset span, .topbar .btn--sm { font-size: 0; gap: 0; padding: 0 var(--s2); }
   .topbar .btn--sm svg { width: 18px; height: 18px; }
@@ -431,6 +440,16 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .card__tools { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
   .card__tools .btn--sm { background: var(--surface-2); border-color: var(--border); color: var(--text); padding: 0 var(--s2); }
 }
+
+/* ---------------- WhatsApp ---------------- */
+.btn--wa { background: #1fa855; color: #fff; box-shadow: 0 8px 24px -12px rgb(31 168 85 / .9); }
+.btn--wa:hover:not(:disabled) { filter: brightness(1.08); }
+.note { margin: 0; padding: var(--s3) var(--s4); border-radius: var(--radius-xs); background: rgb(34 211 238 / .08); border: 1px solid rgb(34 211 238 / .25); color: var(--muted); font-size: 13px; line-height: 1.5; }
+.note b { color: var(--text); }
+.note--warn { background: rgb(251 191 36 / .1); border-color: rgb(251 191 36 / .35); color: #fcd34d; }
+.wa__video { max-height: 46vh; border-radius: 6px; background: #000; }
+.wa__steps { margin: 0; padding: 0 0 0 var(--s5); display: grid; gap: var(--s2); color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.wa__steps b { color: var(--text); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

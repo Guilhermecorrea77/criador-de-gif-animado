@@ -1,10 +1,12 @@
 // Extração de quadros de um vídeo local (nada é enviado para servidor).
 
-function once(el, ev) {
+function once(el, ev, timeout = 4000) {
   return new Promise((resolve, reject) => {
     const ok = () => { cleanup(); resolve(); };
     const fail = () => { cleanup(); reject(new Error('Não foi possível ler o vídeo.')); };
-    const cleanup = () => { el.removeEventListener(ev, ok); el.removeEventListener('error', fail); };
+    // alguns navegadores não disparam "seeked" quando o tempo já é o pedido: não trava
+    const timer = setTimeout(ok, timeout);
+    const cleanup = () => { clearTimeout(timer); el.removeEventListener(ev, ok); el.removeEventListener('error', fail); };
     el.addEventListener(ev, ok, { once: true });
     el.addEventListener('error', fail, { once: true });
   });

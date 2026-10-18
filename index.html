@@ -140,6 +140,19 @@
         <!-- Configurações -->
         <aside class="editor__side card" id="settingsPanel">
           <details open class="group">
+            <summary>Para onde vai o GIF?</summary>
+            <div class="group__body">
+              <div class="chips" id="presetChips">
+                <button data-preset="whatsapp">WhatsApp</button>
+                <button data-preset="stories">Stories / Reels</button>
+                <button data-preset="square">Quadrado</button>
+                <button data-preset="light">Leve (e-mail)</button>
+              </div>
+              <p class="hint" id="presetHint">Ajusta tamanho, proporção e qualidade de uma vez. Você ainda pode mexer em tudo.</p>
+            </div>
+          </details>
+
+          <details open class="group">
             <summary>Tempo e repetição</summary>
             <div class="group__body">
               <div class="field">
@@ -301,6 +314,10 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9z"/></svg>
               Gerar GIF
             </button>
+            <button class="btn btn--wa btn--block" id="btnWhats">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.5l1.3-1.2 2 1-.5 1.4c-.4.8-1.6 1.2-3.2.7-2.6-.8-5-3.2-5.8-5.8-.5-1.6-.1-2.8.7-3.2l1.4-.5 1 2L9 9.5z"/></svg>
+              Vídeo para WhatsApp
+            </button>
             <div class="progress" id="progress" hidden>
               <div class="progress__track"><div class="progress__bar" id="progressBar"></div></div>
               <div class="progress__row">
@@ -331,19 +348,51 @@
         <label for="fileName">Nome do arquivo</label>
         <div class="input-suffix"><input type="text" id="fileName" value="meu-gif"><span>.gif</span></div>
       </div>
+      <p class="note">
+        <b>Vai mandar no WhatsApp?</b> GIF enviado como imagem chega parado. Use o botão verde, que gera um vídeo MP4 curto e em loop, o formato que o WhatsApp anima.
+      </p>
       <div class="modal__actions">
         <button class="btn btn--ghost" data-close>Continuar editando</button>
         <button class="btn btn--outline" id="btnShare" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
-          Compartilhar
+          Compartilhar GIF
         </button>
-        <button class="btn btn--outline" id="btnVideoExport" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
-          <span>Baixar vídeo</span>
+        <button class="btn btn--wa" id="btnWhatsResult">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.5l1.3-1.2 2 1-.5 1.4c-.4.8-1.6 1.2-3.2.7-2.6-.8-5-3.2-5.8-5.8-.5-1.6-.1-2.8.7-3.2l1.4-.5 1 2L9 9.5z"/></svg>
+          WhatsApp
         </button>
         <button class="btn btn--primary" id="btnDownload">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>
           Baixar GIF
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ============ MODAL: WHATSAPP ============ -->
+  <dialog class="modal" id="waModal" aria-labelledby="waTitle">
+    <div class="modal__box">
+      <div class="modal__head">
+        <h2 id="waTitle">Vídeo pronto para o WhatsApp</h2>
+        <button class="icon-btn" data-close aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="result__img"><video id="waVideo" class="wa__video" muted loop autoplay playsinline></video></div>
+      <dl class="result__meta" id="waMeta"></dl>
+      <p class="note note--warn" id="waWarn" hidden></p>
+      <ol class="wa__steps">
+        <li>Toque em <b>Enviar no WhatsApp</b> e escolha o WhatsApp.</li>
+        <li>No editor do WhatsApp, se aparecer o botão <b>GIF</b>, deixe ligado. Ele costuma aparecer em vídeos de até 6 s.</li>
+        <li>No computador: baixe o MP4 e arraste para a conversa no WhatsApp Web.</li>
+      </ol>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close>Fechar</button>
+        <button class="btn btn--outline" id="btnWaDownload">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>
+          Baixar MP4
+        </button>
+        <button class="btn btn--wa" id="btnWaShare" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.5l1.3-1.2 2 1-.5 1.4c-.4.8-1.6 1.2-3.2.7-2.6-.8-5-3.2-5.8-5.8-.5-1.6-.1-2.8.7-3.2l1.4-.5 1 2L9 9.5z"/></svg>
+          Enviar no WhatsApp
         </button>
       </div>
     </div>

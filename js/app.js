@@ -3,7 +3,7 @@ import { buildSequence, drawSeqItem, outputSize, renderFrame, gifDelay } from '.
 import { encodeGif } from './encoder.js';
 import { extractFrames } from './video.js';
 import { decodeGif, canDecodeGif } from './gifdecode.js';
-import { recordVideo, videoSupport } from './videoexport.js';
+import { encodeMp4, recordVideo, recorderSupport, videoPasses, WHATSAPP_MAX_SECONDS } from './videoexport.js';
 import { Camera, hasCamera } from './camera.js';
 
 const MAX_FRAMES = 60;
@@ -82,6 +82,8 @@ const state = {
   undo: [],
   redo: [],
   cacheVersion: 0,
+  rev: 0, // sobe a cada mudança visual; invalida vídeos já gerados
+  mp4: null, // { blob, url, W, H, seconds, codec }
 };
 
 // ---------------------------------------------------------------- importação
@@ -265,6 +267,8 @@ function onFramesChanged() {
 let renderTimer;
 function invalidate(immediate = false) {
   state.dirty = true;
+  state.rev++;
+  dropMp4();
   clearTimeout(renderTimer);
   renderTimer = setTimeout(renderAll, immediate ? 0 : 90);
   updateSummary();
@@ -721,16 +725,28 @@ function updateSummary() {
   const info = `${W}×${H} px · ${seq.length} quadros · ${nf(dur, 1)} s`;
   $('#previewInfo').textContent = info;
   $('#sizeOut').textContent = `${W}×${H}`;
-  const heavy = seq.length * W * H > 90e6;
-  el.textContent = heavy ? `${info} · arquivo grande, pode demorar` : info;
+  const heavy = Math.max(seq.length, state.frames.length) * W * H > 60e6;
+  el.textContent = heavy ? `${info} · pesado, pode demorar` : info;
   el.classList.toggle('is-warn', heavy);
-  $('#btnGenerate').disabled = state.frames.length < 2 || !!state.encoding;
-  $('#btnGenerate').title = state.frames.length < 2 ? 'Adicione pelo menos 2 quadros' : '';
+  const blocked = state.frames.length < 2 || !!state.encoding;
+  const why = state.frames.length < 2 ? 'Adicione pelo menos 2 quadros' : '';
+  for (const id of ['btnGenerate', 'btnWhats']) {
+    $('#' + id).disabled = blocked;
+    $('#' + id).title = why;
+  }
 }
 
 // ---------------------------------------------------------------- geração
 async function generate() {
   if (state.frames.length < 2 || state.encoding) return;
+  {
+    // gif.js guarda uma cópia de cada quadro na memória até terminar
+    const { W, H } = outputSize(state.frames, state.settings);
+    if (buildSequence(state.frames, state.settings).length * W * H > 150e6) {
+      toast(`Pesado demais para gerar GIF aqui (${W}×${H}). Reduza a largura ou os quadros.`, true);
+      return;
+    }
+  }
   const btn = $('#btnGenerate');
   const prog = $('#progress');
   btn.disabled = true;
@@ -782,7 +798,6 @@ function showResult() {
 
   const file = new File([g.blob], fileName(), { type: 'image/gif' });
   $('#btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
-  $('#btnVideoExport').hidden = !videoSupport();
   $('#resultModal').showModal();
 }
 
@@ -943,6 +958,7 @@ const fmtTime = (t) => `${nf(t, 2)} s`;
 
 function openVideo(file) {
   const modal = $('#videoModal');
+  if (modal.open) return;
   const v = $('#videoEl');
   if (videoState.url) URL.revokeObjectURL(videoState.url);
   videoState.url = URL.createObjectURL(file);
@@ -1079,40 +1095,135 @@ async function makeSample() {
   await addBlobs(blobs);
 }
 
-// ---------------------------------------------------------------- exportar vídeo
-let videoJob = null;
-async function exportVideo() {
-  const btn = $('#btnVideoExport');
-  const label = $('span', btn);
-  if (videoJob) { videoJob.abort(); return; }
-  const g = state.lastGif;
-  if (!g) return;
-  const per = totalDuration(state.seq);
-  const loop = state.settings.loop;
-  // vídeo curto demais fica estranho: repete até ~3 s (máx. 10 voltas)
-  const passes = loop === 0 ? Math.min(10, Math.max(1, Math.ceil(3000 / per))) : loop;
-  videoJob = new AbortController();
-  label.textContent = 'Gravando… 0% (cancelar)';
+// ---------------------------------------------------------------- vídeo para WhatsApp
+// O WhatsApp trata GIF enviado como imagem como figura parada. Um MP4 H.264 curto,
+// sem áudio, é reproduzido em loop. Por isso exportamos MP4 em vez de repassar o GIF.
+function dropMp4() {
+  if (state.mp4) URL.revokeObjectURL(state.mp4.url);
+  state.mp4 = null;
+}
+
+const mp4Name = () => fileName().replace(/\.gif$/, '.mp4');
+
+async function prepareMp4() {
+  if (state.mp4) return state.mp4;
+  if (state.frames.length < 2 || state.encoding) return null;
+
+  const ctrl = new AbortController();
+  state.encoding = { abort: () => ctrl.abort() };
+  const prog = $('#progress');
+  prog.hidden = false;
+  $('#progressBar').style.width = '0%';
+  $('#progressText').textContent = 'Preparando vídeo…';
+  setPlaying(false);
+  updateSummary();
+
+  const rev = state.rev;
   try {
-    const { blob, ext } = await recordVideo({
-      seq: state.seq, cache: state.cache, W: g.W, H: g.H, passes, signal: videoJob.signal,
-      onProgress: (p) => (label.textContent = `Gravando… ${Math.round(p * 100)}% (cancelar)`),
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName().replace(/\.gif$/, '.' + ext);
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast(`Vídeo ${ext.toUpperCase()} salvo (${formatBytes(blob.size)}).`);
+    await ensureRendered();
+    const { W, H } = state.size;
+    const per = totalDuration(state.seq);
+    const args = {
+      seq: state.seq, cache: state.cache, W, H,
+      passes: videoPasses(per, state.settings.loop),
+      signal: ctrl.signal,
+      onProgress: (p) => {
+        $('#progressBar').style.width = `${Math.round(p * 100)}%`;
+        $('#progressText').textContent = `Gerando vídeo… ${Math.round(p * 100)}%`;
+      },
+    };
+    let out = await encodeMp4(args);
+    if (!out) {
+      // sem H.264 no WebCodecs: tenta o gravador do navegador, que só serve se sair MP4
+      if (!recorderSupport()?.whatsapp) {
+        toast('Este navegador não gera vídeo compatível com o WhatsApp. Use Chrome, Edge ou Safari atualizado.', true);
+        return null;
+      }
+      out = await recordVideo(args);
+    }
+    if (rev !== state.rev) { toast('Os ajustes mudaram durante a geração. Toque de novo.', true); return null; }
+    state.mp4 = { ...out, url: URL.createObjectURL(out.blob), W: W - (W % 2), H: H - (H % 2), per };
+    return state.mp4;
   } catch (err) {
-    if (err.name !== 'AbortError') toast(err.message || 'Falha ao gravar o vídeo.', true);
+    if (err?.name === 'AbortError') toast('Geração cancelada.');
+    else { console.error(err); toast('Não foi possível gerar o vídeo.', true); }
+    return null;
   } finally {
-    videoJob = null;
-    label.textContent = 'Baixar vídeo';
+    state.encoding = null;
+    prog.hidden = true;
+    setPlaying(true);
+    updateSummary();
   }
+}
+
+async function sendToWhatsApp() {
+  if ($('#resultModal').open) $('#resultModal').close();
+  const m = await prepareMp4();
+  if (!m) return;
+
+  const v = $('#waVideo');
+  v.src = m.url;
+  v.play().catch(() => {});
+  $('#waMeta').innerHTML = [
+    ['Tamanho', formatBytes(m.blob.size)],
+    ['Dimensões', `${m.W}×${m.H}`],
+    ['Duração', `${nf(m.seconds, 1)} s`],
+    ['Formato', `MP4 · ${m.codec}`],
+  ].map(([k, val]) => `<div><dt>${k}</dt><dd>${val}</dd></div>`).join('');
+
+  const warn = $('#waWarn');
+  const long = m.per / 1000 > WHATSAPP_MAX_SECONDS;
+  warn.hidden = !long;
+  if (long) {
+    warn.textContent = `A animação dura ${nf(m.per / 1000, 1)} s. O WhatsApp só oferece o botão GIF em vídeos curtos (até 6 s). Use menos quadros ou aumente a velocidade.`;
+  }
+
+  const file = new File([m.blob], mp4Name(), { type: 'video/mp4' });
+  $('#btnWaShare').hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
+  $('#waModal').showModal();
+}
+
+function waDownload() {
+  const m = state.mp4;
+  if (!m) return;
+  const a = document.createElement('a');
+  a.href = m.url;
+  a.download = mp4Name();
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
+async function waShare() {
+  const m = state.mp4;
+  if (!m) return;
+  try {
+    // só o arquivo: alguns apps descartam o vídeo quando recebem também título ou texto
+    await navigator.share({ files: [new File([m.blob], mp4Name(), { type: 'video/mp4' })] });
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Não foi possível abrir o compartilhamento. Baixe o MP4 e envie pelo WhatsApp.', true);
+  }
+}
+
+// ---------------------------------------------------------------- atalhos de destino
+const PRESETS = {
+  whatsapp: { width: 480, quality: 'medium', hint: 'WhatsApp: 480 px deixa o vídeo leve. Ao terminar, use o botão verde "Vídeo para WhatsApp".' },
+  stories: { width: 640, aspect: '9:16', fit: 'cover', quality: 'medium', hint: 'Vertical 9:16 em 640 px, bom para Stories e Reels.' },
+  square: { width: 480, aspect: '1:1', fit: 'cover', quality: 'medium', hint: 'Quadrado 1:1 em 480 px, bom para feed.' },
+  light: { width: 320, quality: 'low', hint: 'Pequeno e leve, bom para e-mail e sites.' },
+};
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  const { hint, ...vals } = p;
+  Object.assign(state.settings, vals);
+  $('#width').value = String(state.settings.width);
+  paints.aspect();
+  paints.fit();
+  paints.quality();
+  $('#presetHint').textContent = hint;
+  onSettingsChanged();
 }
 
 // ---------------------------------------------------------------- câmera
@@ -1207,7 +1318,6 @@ function bindCamera() {
   shots.addEventListener('input', paint);
   gap.addEventListener('input', paint);
   paint();
-  $('#resultModal').addEventListener('close', () => videoJob?.abort());
   $('#camModal').addEventListener('close', () => {
     cam.busy = false;
     cam.camera?.stop();
@@ -1227,7 +1337,15 @@ function bindGlobal() {
   $('#btnGenerate').addEventListener('click', generate);
   $('#btnCancel').addEventListener('click', () => state.encoding?.abort());
   $('#btnDownload').addEventListener('click', download);
-  $('#btnVideoExport').addEventListener('click', exportVideo);
+  $('#btnWhats').addEventListener('click', sendToWhatsApp);
+  $('#btnWhatsResult').addEventListener('click', sendToWhatsApp);
+  $('#btnWaDownload').addEventListener('click', waDownload);
+  $('#btnWaShare').addEventListener('click', waShare);
+  $('#waModal').addEventListener('close', () => $('#waVideo').pause());
+  $('#presetChips').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-preset]');
+    if (b) applyPreset(b.dataset.preset);
+  });
   $('#btnUndo').addEventListener('click', undo);
   $('#btnRedo').addEventListener('click', redo);
   $('#btnShare').addEventListener('click', share);
