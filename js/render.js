@@ -2,14 +2,14 @@
 // Usado tanto pela pré-visualização quanto pela exportação, garantindo
 // que o GIF final fique idêntico ao que aparece na tela.
 
-export const ASPECTS = {
-  original: null,
-  '1:1': 1,
-  '4:3': 4 / 3,
-  '3:4': 3 / 4,
-  '16:9': 16 / 9,
-  '9:16': 9 / 16,
-};
+/** Proporção (largura/altura) de "16:9", "9:19.5" ou "custom"; null = usar a do primeiro quadro. */
+export function aspectRatio(s) {
+  if (s.aspect === 'original') return null;
+  const [w, h] = s.aspect === 'custom'
+    ? [s.customW, s.customH]
+    : String(s.aspect).split(':').map(Number);
+  return w > 0 && h > 0 ? w / h : null;
+}
 
 // Matrizes de cor 3x3 (linhas = R, G, B de saída)
 const PRESETS = {
@@ -64,7 +64,7 @@ function srcSize(src) {
 
 /** Calcula as dimensões finais do GIF a partir das configurações. */
 export function outputSize(frames, s) {
-  let ratio = ASPECTS[s.aspect];
+  let ratio = aspectRatio(s);
   if (!ratio) {
     const first = frames[0] ? srcSize(getCroppedSource(frames[0])) : { w: 1, h: 1 };
     ratio = first.w / first.h;
@@ -184,17 +184,51 @@ function drawText(ctx, W, H, t) {
   });
 }
 
+/** Cor média da borda da imagem (prints têm fundo uniforme: o preenchimento fica invisível). */
+function edgeColor(src) {
+  const { w, h } = srcSize(src);
+  const c = document.createElement('canvas');
+  c.width = 16; c.height = 16;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(src, 0, 0, w, h, 0, 0, 16, 16);
+  const d = x.getImageData(0, 0, 16, 16).data;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) {
+    if (i && i < 15 && j && j < 15) continue;
+    const k = (i * 16 + j) * 4;
+    r += d[k]; g += d[k + 1]; b += d[k + 2]; n++;
+  }
+  return `rgb(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)})`;
+}
+
+/** Bolinha numerada no canto (passo a passo). */
+function drawStepBadge(ctx, W, n) {
+  const r = Math.max(11, Math.round(W * 0.04));
+  const m = Math.round(r * 0.8);
+  ctx.beginPath();
+  ctx.arc(m + r, m + r, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#7c6cff';
+  ctx.fill();
+  ctx.lineWidth = Math.max(2, r / 7);
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 ${Math.round(r * 1.15)}px system-ui, "Segoe UI", Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(n), m + r, m + r + r * 0.05);
+}
+
 /** Renderiza um quadro completo no tamanho final. */
-export function renderFrame(frame, W, H, s, target) {
+export function renderFrame(frame, W, H, s, target, index = 0) {
   const canvas = target || document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  ctx.fillStyle = s.bg;
-  ctx.fillRect(0, 0, W, H);
-
   const src = getCroppedSource(frame);
+  ctx.fillStyle = s.bgAuto ? edgeColor(src) || s.bg : s.bg;
+  ctx.fillRect(0, 0, W, H);
   const { w: sw, h: sh } = srcSize(src);
   const scale = s.fit === 'contain' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh);
   const dw = sw * scale;
@@ -205,6 +239,7 @@ export function renderFrame(frame, W, H, s, target) {
 
   applyFilters(ctx, W, H, s);
   drawText(ctx, W, H, s.text);
+  if (s.stepNumbers) drawStepBadge(ctx, W, index + 1);
   return canvas;
 }
 

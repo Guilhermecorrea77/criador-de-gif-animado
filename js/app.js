@@ -8,17 +8,23 @@ import { Camera, hasCamera } from './camera.js';
 
 const MAX_FRAMES = 60;
 const MAX_SIDE = 1600; // imagens maiores são reduzidas ao importar (economiza memória)
-const STORAGE_KEY = 'gif-maker:settings:v1';
+const STORAGE_KEY = 'gif-maker:settings:v2';
+const THEME_KEY = 'gif-maker:theme';
 
 const DEFAULTS = {
-  fps: 5,
+  fps: 1, // quadros por segundo (1 = 1 s por print)
+  timing: 'sec',
   loop: 0,
   boomerang: false,
   reverse: false,
   aspect: 'original',
-  width: 480,
-  fit: 'cover',
-  bg: '#000000',
+  customW: 16,
+  customH: 9,
+  width: 800,
+  fit: 'contain',
+  bg: '#ffffff',
+  bgAuto: true,
+  stepNumbers: false,
   filter: 'none',
   brightness: 0,
   contrast: 0,
@@ -180,11 +186,32 @@ function imageFilesFrom(listLike) {
     .sort((a, b) => collator.compare(a.name || '', b.name || ''));
 }
 
+function fpsText(fps) {
+  return state.settings.timing === 'sec'
+    ? `${nf(1 / fps, 1)} s por quadro`
+    : `${nf(fps)} qps · ${Math.round(1000 / fps)} ms`;
+}
+
+/** Ajusta o controle de tempo conforme o modo: "sec" (s por print) ou "fps" (animação). */
+function paintTiming() {
+  const s = state.settings;
+  const sec = s.timing === 'sec';
+  const el = $('#fps');
+  // no modo "sec" o controle vale segundos por quadro; internamente guardamos qps
+  if (sec) { el.min = 0.2; el.max = 5; el.step = 0.1; el.value = Math.round((1 / s.fps) * 10) / 10; }
+  else { el.min = 0.5; el.max = 30; el.step = 0.5; el.value = s.fps; }
+  $('#fpsLabel').textContent = sec ? 'Tempo por quadro' : 'Velocidade';
+  $('#scaleL').textContent = sec ? 'Rápido' : 'Lento';
+  $('#scaleR').textContent = sec ? 'Lento' : 'Rápido';
+  $('#fpsOut').textContent = fpsText(s.fps);
+  $$('#timingSeg button').forEach((b) => b.classList.toggle('is-active', b.dataset.v === s.timing));
+}
+
 function setFps(v) {
-  const fps = Math.min(50, Math.max(0.5, Math.round(v * 2) / 2));
+  const fps = Math.min(50, Math.max(0.2, Math.round(v * 10) / 10));
   state.settings.fps = fps;
-  $('#fps').value = fps;
-  $('#fpsOut').textContent = `${nf(fps)} qps · ${Math.round(1000 / fps)} ms`;
+  if (fps > 5) state.settings.timing = 'fps';
+  paintTiming();
   onSettingsChanged();
 }
 
@@ -253,6 +280,7 @@ function resetAll() {
   state.selectedId = null;
   if (state.lastGif) URL.revokeObjectURL(state.lastGif.url);
   state.lastGif = null;
+  hideResult();
   $('#fileInput').value = '';
   showUpload();
   renderFrameList();
@@ -272,6 +300,7 @@ function invalidate(immediate = false) {
   clearTimeout(renderTimer);
   renderTimer = setTimeout(renderAll, immediate ? 0 : 90);
   updateSummary();
+  if (state.lastGif) markStale();
 }
 
 async function renderAll() {
@@ -283,15 +312,15 @@ async function renderAll() {
   const { W, H } = outputSize(frames, s);
   state.size = { W, H };
   // Só os ajustes visuais entram na chave: mudar velocidade/loop não re-renderiza nada
-  const { aspect, width, fit, bg, filter, brightness, contrast, saturation, text } = s;
-  const visualKey = JSON.stringify({ aspect, width, fit, bg, filter, brightness, contrast, saturation, text, W, H });
+  const { aspect, customW, customH, width, fit, bg, bgAuto, stepNumbers, filter, brightness, contrast, saturation, text } = s;
+  const visualKey = JSON.stringify({ aspect, customW, customH, width, fit, bg, bgAuto, stepNumbers, filter, brightness, contrast, saturation, text, W, H });
   const next = [];
   const t0 = performance.now();
   for (let i = 0; i < frames.length; i++) {
     const f = frames[i];
-    const rk = visualKey + JSON.stringify(f.crop);
+    const rk = visualKey + JSON.stringify(f.crop) + (stepNumbers ? '#' + i : '');
     if (f._canvas && f._rk === rk) { next[i] = f._canvas; continue; }
-    f._canvas = renderFrame(f, W, H, s, f._canvas);
+    f._canvas = renderFrame(f, W, H, s, f._canvas, i);
     f._rk = rk;
     next[i] = f._canvas;
     // cede a vez à interface a cada ~30 ms em listas grandes
@@ -647,7 +676,21 @@ function updateConditional() {
 const paints = {};
 function bindSettings() {
   const s = state.settings;
-  bindRange('fps', 'fps', (v) => `${nf(v)} qps · ${Math.round(1000 / v)} ms`);
+  paintTiming();
+  $('#fps').addEventListener('input', () => {
+    const v = +$('#fps').value;
+    s.fps = s.timing === 'sec' ? 1 / v : v;
+    $('#fpsOut').textContent = fpsText(s.fps);
+    onSettingsChanged();
+  });
+  $('#timingSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]');
+    if (!b || b.dataset.v === s.timing) return;
+    s.timing = b.dataset.v;
+    if (s.timing === 'fps') s.fps = Math.min(30, Math.max(0.5, Math.round(s.fps * 2) / 2));
+    paintTiming();
+    onSettingsChanged();
+  });
   bindRange('brightness', 'brightness', (v) => (v > 0 ? '+' : '') + v);
   bindRange('contrast', 'contrast', (v) => (v > 0 ? '+' : '') + v);
   bindRange('saturation', 'saturation', (v) => (v > 0 ? '+' : '') + v);
@@ -669,7 +712,21 @@ function bindSettings() {
   bindCheck('dither', 'dither');
   bindCheck('textOutline', 'text.outline');
 
-  paints.aspect = bindToggleGroup('aspectChips', 'aspect');
+  const paintCustom = () => { $('#customAspect').hidden = s.aspect !== 'custom'; };
+  paints.aspect = bindToggleGroup('aspectChips', 'aspect', paintCustom);
+  paintCustom();
+  for (const [id, key] of [['customW', 'customW'], ['customH', 'customH']]) {
+    const el = $('#' + id);
+    el.value = s[key];
+    el.addEventListener('input', () => {
+      const v = parseFloat(el.value.replace(',', '.'));
+      if (v > 0) { s[key] = Math.min(99, v); onSettingsChanged(); }
+    });
+  }
+  bindCheck('stepNumbers', 'stepNumbers');
+  const paintBg = () => { $('#bg').disabled = s.bgAuto; $('#bg').style.opacity = s.bgAuto ? '.4' : ''; };
+  bindCheck('bgAuto', 'bgAuto', paintBg);
+  paintBg();
   paints.fit = bindToggleGroup('fitSeg', 'fit', updateConditional);
   paints.filter = bindToggleGroup('filterChips', 'filter');
   paints.transition = bindToggleGroup('transitionSeg', 'transition', updateConditional);
@@ -788,6 +845,7 @@ async function generate() {
 
 function showResult() {
   const g = state.lastGif;
+  g.rev = state.rev;
   $('#resultImg').src = g.url;
   $('#resultMeta').innerHTML = [
     ['Tamanho', formatBytes(g.blob.size)],
@@ -798,7 +856,23 @@ function showResult() {
 
   const file = new File([g.blob], fileName(), { type: 'image/gif' });
   $('#btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
-  $('#resultModal').showModal();
+  const card = $('#resultCard');
+  card.hidden = false;
+  markStale();
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** O resultado fica na página (sem janela): marca como desatualizado se os ajustes mudarem. */
+function markStale() {
+  const g = state.lastGif;
+  const stale = !!g && g.rev !== state.rev;
+  $('#resultCard').classList.toggle('is-stale', stale);
+  $('#resultStale').hidden = !stale;
+  $('#resultPill').textContent = stale ? 'desatualizado' : 'pronto';
+}
+
+function hideResult() {
+  $('#resultCard').hidden = true;
 }
 
 function fileName() {
@@ -1157,7 +1231,6 @@ async function prepareMp4() {
 }
 
 async function sendToWhatsApp() {
-  if ($('#resultModal').open) $('#resultModal').close();
   const m = await prepareMp4();
   if (!m) return;
 
@@ -1207,6 +1280,7 @@ async function waShare() {
 
 // ---------------------------------------------------------------- atalhos de destino
 const PRESETS = {
+  prints: { width: 800, aspect: 'original', fit: 'contain', bgAuto: true, timing: 'sec', fps: 1, quality: 'high', hint: 'Prints e tutoriais: 1 s por quadro, 800 px, cor de fundo igual à borda e qualidade alta para o texto ficar legível.' },
   whatsapp: { width: 480, quality: 'medium', hint: 'WhatsApp: 480 px deixa o vídeo leve. Ao terminar, use o botão verde "Vídeo para WhatsApp".' },
   stories: { width: 640, aspect: '9:16', fit: 'cover', quality: 'medium', hint: 'Vertical 9:16 em 640 px, bom para Stories e Reels.' },
   square: { width: 480, aspect: '1:1', fit: 'cover', quality: 'medium', hint: 'Quadrado 1:1 em 480 px, bom para feed.' },
@@ -1222,6 +1296,10 @@ function applyPreset(name) {
   paints.aspect();
   paints.fit();
   paints.quality();
+  $('#customAspect').hidden = state.settings.aspect !== 'custom';
+  $('#bgAuto').checked = state.settings.bgAuto;
+  $('#bg').disabled = state.settings.bgAuto;
+  paintTiming();
   $('#presetHint').textContent = hint;
   onSettingsChanged();
 }
@@ -1349,6 +1427,8 @@ function bindGlobal() {
   $('#btnUndo').addEventListener('click', undo);
   $('#btnRedo').addEventListener('click', redo);
   $('#btnShare').addEventListener('click', share);
+  $('#btnResultClose').addEventListener('click', hideResult);
+  $('#btnTheme').addEventListener('click', toggleTheme);
 
   // fechar modais
   $$('dialog').forEach((d) => {
@@ -1408,6 +1488,19 @@ function bindGlobal() {
 function confirmReset() {
   // window.confirm é simples e funciona em todos os navegadores
   return window.confirm('Descartar todos os quadros e começar de novo?');
+}
+
+// ---------------------------------------------------------------- tema
+function currentTheme() {
+  return document.documentElement.dataset.theme
+    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+}
+function toggleTheme() {
+  const next = currentTheme() === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch { /* ignora */ }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = next === 'light' ? '#f3f5fb' : '#0b1020';
 }
 
 // ---------------------------------------------------------------- início

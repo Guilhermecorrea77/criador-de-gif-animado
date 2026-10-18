@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Criador de GIF Animado</title>
-  <meta name="description" content="Crie GIFs animados a partir de fotos ou vídeos direto no navegador: recorte, filtros, texto, transições e efeito boomerang. Nada é enviado para servidores.">
+  <script>try{var t=localStorage.getItem("gif-maker:theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Transforme prints de tela em GIF ou vídeo para tutoriais, demonstrações e relatos de bug. Várias proporções, recorte, texto e numeração de passos, tudo no navegador.">
   <meta name="theme-color" content="#0b1020">
   <meta property="og:title" content="Criador de GIF Animado">
-  <meta property="og:description" content="Transforme fotos e vídeos em GIFs animados, 100% no navegador.">
+  <meta property="og:description" content="Prints de tela viram GIF ou vídeo em segundos, 100% no navegador.">
   <meta property="og:type" content="website">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -26,6 +28,10 @@
         <span>Criador de <strong>GIF</strong></span>
       </a>
       <div class="topbar__actions">
+        <button class="icon-btn" id="btnTheme" title="Alternar tema claro/escuro" aria-label="Alternar tema claro/escuro">
+          <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
         <button class="btn btn--ghost btn--sm" id="btnReset" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>
           Começar de novo
@@ -38,39 +44,41 @@
     <!-- ============ TELA 1: UPLOAD ============ -->
     <section class="view view--upload" id="viewUpload">
       <div class="hero">
-        <h1>Dê vida às suas fotos</h1>
-        <p>Junte imagens ou trechos de vídeo, ajuste e baixe seu GIF. Tudo acontece no seu navegador: nenhum arquivo sai do seu aparelho.</p>
+        <p class="hero__tag">Feito para screenshots</p>
+        <h1>Prints de tela viram GIF</h1>
+        <p>Junte capturas de tela em um GIF ou vídeo para tutoriais passo a passo, demonstrações e relatos de bug. Tudo roda no seu navegador: nenhum arquivo sai do seu aparelho.</p>
       </div>
 
-      <label class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" accept="image/*" multiple>
-        <svg class="dropzone__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1M16 8l-4-4-4 4M12 4v12"/></svg>
-        <span class="dropzone__title">Arraste imagens aqui ou <u>clique para escolher</u></span>
-        <span class="dropzone__hint">JPG, PNG, WebP, GIF animado · até <span data-max></span> quadros · ou cole com Ctrl+V</span>
-      </label>
-
-      <div class="upload-alt">
-        <button class="btn btn--outline" id="btnVideo">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
-          Extrair quadros de um vídeo
-        </button>
-        <button class="btn btn--outline" id="btnCam" data-cam>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
-          Usar a câmera
-        </button>
-        <button class="btn btn--ghost" id="btnSample">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
-          Testar com exemplo
-        </button>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/*" multiple aria-label="Escolher imagens ou prints">
+        <div class="dropzone__main">
+          <svg class="dropzone__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1M16 8l-4-4-4 4M12 4v12"/></svg>
+          <span class="dropzone__title">Arraste prints ou imagens aqui, <u>clique para escolher</u> ou cole com Ctrl+V</span>
+          <span class="dropzone__hint">PNG, JPG, WebP ou GIF · até <span data-max></span> quadros</span>
+        </div>
+        <div class="dropzone__actions">
+          <button class="btn btn--outline" id="btnVideo" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
+            Extrair de um vídeo
+          </button>
+          <button class="btn btn--outline" id="btnCam" data-cam type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+            Usar a câmera
+          </button>
+          <button class="btn btn--ghost" id="btnSample" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+            Testar com exemplo
+          </button>
+        </div>
         <input type="file" id="videoInput" accept="video/*" hidden>
       </div>
+      <p class="dropzone__tip">Dica: tire o print com <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> (Windows) ou <kbd>⌘</kbd> <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>4</kbd> (Mac) e cole aqui.</p>
 
-      <ul class="features">
-        <li><b>Recorte e giro</b> por quadro ou em todos de uma vez</li>
-        <li><b>Filtros e texto</b> com transição suave entre quadros</li>
-        <li><b>Boomerang e ritmo</b> ordem inversa e tempo por quadro</li>
-        <li><b>Exporte GIF ou vídeo</b> e use offline depois do primeiro acesso</li>
-      </ul>
+      <ol class="steps">
+        <li><b>Adicione os prints</b><span>Arraste, cole ou escolha os arquivos. Vídeo e câmera também funcionam.</span></li>
+        <li><b>Ajuste</b><span>Proporção, recorte, tempo por quadro, texto e numeração dos passos.</span></li>
+        <li><b>Baixe ou envie</b><span>GIF para qualquer lugar ou vídeo MP4 para o WhatsApp.</span></li>
+      </ol>
     </section>
 
     <!-- ============ TELA 2: EDITOR ============ -->
@@ -91,6 +99,40 @@
               <span class="preview__frame" id="previewFrame"></span>
             </div>
           </div>
+
+          <!-- Resultado: fica na página enquanto você continua editando -->
+          <section class="card result" id="resultCard" aria-labelledby="resultTitle" hidden>
+            <div class="card__head">
+              <h2 id="resultTitle">Seu GIF <span class="pill" id="resultPill">pronto</span></h2>
+              <button class="icon-btn icon-btn--sm" id="btnResultClose" aria-label="Fechar resultado" title="Fechar resultado"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+            </div>
+            <div class="result__body">
+              <div class="result__img"><img id="resultImg" alt="GIF gerado"></div>
+              <div class="result__side">
+                <dl class="result__meta" id="resultMeta"></dl>
+                <p class="note" id="resultStale" hidden>Você mudou os ajustes depois de gerar. Toque em "Gerar GIF" para atualizar.</p>
+                <div class="field">
+                  <label for="fileName">Nome do arquivo</label>
+                  <div class="input-suffix"><input type="text" id="fileName" value="meu-gif"><span>.gif</span></div>
+                </div>
+                <div class="result__actions">
+                  <button class="btn btn--primary" id="btnDownload">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>
+                    Baixar GIF
+                  </button>
+                  <button class="btn btn--wa" id="btnWhatsResult">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.5l1.3-1.2 2 1-.5 1.4c-.4.8-1.6 1.2-3.2.7-2.6-.8-5-3.2-5.8-5.8-.5-1.6-.1-2.8.7-3.2l1.4-.5 1 2L9 9.5z"/></svg>
+                    WhatsApp
+                  </button>
+                  <button class="btn btn--outline" id="btnShare" hidden>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+                    Compartilhar GIF
+                  </button>
+                </div>
+                <p class="hint">No WhatsApp, GIF enviado como imagem chega parado. O botão verde gera um vídeo MP4 curto em loop, que ele anima.</p>
+              </div>
+            </div>
+          </section>
 
           <!-- Quadros -->
           <div class="card frames">
@@ -143,25 +185,30 @@
             <summary>Para onde vai o GIF?</summary>
             <div class="group__body">
               <div class="chips" id="presetChips">
+                <button data-preset="prints">Prints / tutorial</button>
                 <button data-preset="whatsapp">WhatsApp</button>
                 <button data-preset="stories">Stories / Reels</button>
                 <button data-preset="square">Quadrado</button>
                 <button data-preset="light">Leve (e-mail)</button>
               </div>
-              <p class="hint" id="presetHint">Ajusta tamanho, proporção e qualidade de uma vez. Você ainda pode mexer em tudo.</p>
+              <p class="hint" id="presetHint">Ajusta tamanho, proporção, tempo e qualidade de uma vez. Você ainda pode mexer em tudo.</p>
             </div>
           </details>
 
           <details open class="group">
             <summary>Tempo e repetição</summary>
             <div class="group__body">
+              <div class="segmented" id="timingSeg" role="group" aria-label="Modo de tempo">
+                <button data-v="sec">Prints (s por quadro)</button>
+                <button data-v="fps">Animação (qps)</button>
+              </div>
               <div class="field">
                 <div class="field__row">
-                  <label for="fps">Velocidade</label>
+                  <label for="fps" id="fpsLabel">Tempo por quadro</label>
                   <output id="fpsOut"></output>
                 </div>
-                <input type="range" id="fps" min="0.5" max="50" step="0.5">
-                <div class="field__scale"><span>Lento</span><span>Rápido</span></div>
+                <input type="range" id="fps" min="0.2" max="5" step="0.1">
+                <div class="field__scale"><span id="scaleL">Rápido</span><span id="scaleR">Lento</span></div>
               </div>
               <div class="field">
                 <label for="loop">Repetir</label>
@@ -185,13 +232,26 @@
             <div class="group__body">
               <div class="field">
                 <label>Proporção</label>
-                <div class="chips" id="aspectChips" role="radiogroup">
+                <div class="chips" id="aspectChips" role="radiogroup" aria-label="Proporção">
                   <button data-v="original">Original</button>
-                  <button data-v="1:1">1:1</button>
+                  <button data-v="16:9">16:9 tela</button>
+                  <button data-v="16:10">16:10 notebook</button>
+                  <button data-v="21:9">21:9 ultrawide</button>
                   <button data-v="4:3">4:3</button>
+                  <button data-v="3:2">3:2</button>
+                  <button data-v="5:4">5:4</button>
+                  <button data-v="1:1">1:1 quadrado</button>
+                  <button data-v="4:5">4:5 feed</button>
                   <button data-v="3:4">3:4</button>
-                  <button data-v="16:9">16:9</button>
-                  <button data-v="9:16">9:16</button>
+                  <button data-v="2:3">2:3</button>
+                  <button data-v="9:16">9:16 stories</button>
+                  <button data-v="9:19.5">9:19,5 celular</button>
+                  <button data-v="custom">Personalizada</button>
+                </div>
+                <div class="custom-aspect" id="customAspect" hidden>
+                  <input type="number" id="customW" min="1" max="99" step="0.5" inputmode="decimal" aria-label="Largura da proporção">
+                  <span aria-hidden="true">:</span>
+                  <input type="number" id="customH" min="1" max="99" step="0.5" inputmode="decimal" aria-label="Altura da proporção">
                 </div>
               </div>
               <div class="field">
@@ -202,10 +262,11 @@
                 <select id="width">
                   <option value="240">240 px (bem leve)</option>
                   <option value="320">320 px</option>
-                  <option value="480">480 px (recomendado)</option>
+                  <option value="480">480 px (leve)</option>
                   <option value="640">640 px</option>
-                  <option value="800">800 px</option>
+                  <option value="800">800 px (bom para prints)</option>
                   <option value="1080">1080 px (pesado)</option>
+                  <option value="1280">1280 px (muito pesado)</option>
                 </select>
               </div>
               <div class="field">
@@ -215,9 +276,13 @@
                   <button data-v="contain">Encaixar</button>
                 </div>
               </div>
-              <div class="field field--inline" id="bgField">
-                <label for="bg">Cor de fundo</label>
-                <input type="color" id="bg">
+              <div class="field" id="bgField">
+                <div class="field__row">
+                  <label for="bg">Cor de fundo</label>
+                  <input type="color" id="bg" aria-label="Cor de fundo">
+                </div>
+                <label class="switch"><input type="checkbox" id="bgAuto"><span></span>Usar a cor da borda do print</label>
+                <p class="hint">Aparece nas sobras quando a imagem não preenche a proporção.</p>
               </div>
             </div>
           </details>
@@ -251,7 +316,7 @@
           </details>
 
           <details class="group">
-            <summary>Texto / legenda</summary>
+            <summary>Texto e passos</summary>
             <div class="group__body">
               <div class="field">
                 <label for="textContent">Texto</label>
@@ -274,6 +339,7 @@
                 <input type="color" id="textColor">
               </div>
               <label class="switch"><input type="checkbox" id="textOutline"><span></span>Contorno</label>
+              <label class="switch"><input type="checkbox" id="stepNumbers"><span></span>Numerar os passos (1, 2, 3…)</label>
             </div>
           </details>
 
@@ -334,40 +400,6 @@
   <footer class="footer">
     Feito com HTML, CSS e JavaScript · Seus arquivos nunca saem do seu aparelho
   </footer>
-
-  <!-- ============ MODAL: RESULTADO ============ -->
-  <dialog class="modal" id="resultModal" aria-labelledby="resultTitle">
-    <div class="modal__box modal__box--result">
-      <div class="modal__head">
-        <h2 id="resultTitle">Seu GIF está pronto!</h2>
-        <button class="icon-btn" data-close aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-      </div>
-      <div class="result__img"><img id="resultImg" alt="GIF gerado"></div>
-      <dl class="result__meta" id="resultMeta"></dl>
-      <div class="field">
-        <label for="fileName">Nome do arquivo</label>
-        <div class="input-suffix"><input type="text" id="fileName" value="meu-gif"><span>.gif</span></div>
-      </div>
-      <p class="note">
-        <b>Vai mandar no WhatsApp?</b> GIF enviado como imagem chega parado. Use o botão verde, que gera um vídeo MP4 curto e em loop, o formato que o WhatsApp anima.
-      </p>
-      <div class="modal__actions">
-        <button class="btn btn--ghost" data-close>Continuar editando</button>
-        <button class="btn btn--outline" id="btnShare" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
-          Compartilhar GIF
-        </button>
-        <button class="btn btn--wa" id="btnWhatsResult">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.5l1.3-1.2 2 1-.5 1.4c-.4.8-1.6 1.2-3.2.7-2.6-.8-5-3.2-5.8-5.8-.5-1.6-.1-2.8.7-3.2l1.4-.5 1 2L9 9.5z"/></svg>
-          WhatsApp
-        </button>
-        <button class="btn btn--primary" id="btnDownload">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>
-          Baixar GIF
-        </button>
-      </div>
-    </div>
-  </dialog>
 
   <!-- ============ MODAL: WHATSAPP ============ -->
   <dialog class="modal" id="waModal" aria-labelledby="waTitle">
